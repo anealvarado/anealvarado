@@ -1,0 +1,151 @@
+---
+title: "NYPD_Shooting_Data_Rmd"
+author: "A.Alvarado"
+date: "2025-02-02"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import_NYPD_data}
+
+NYPD_Url <- read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+
+```
+```{r tidy_NYPD_data}
+
+summary(NYPD_Url)
+NYPD_Data <- as.data.frame(NYPD_Url)
+
+is_na_or_null <- function(NYPD_Data) {
+  is.na(NYPD_Data) || is.null(NYPD_Data)
+  as.logical()
+}
+
+NYPD_Data <- NYPD_Data %>%
+  select(-c(Longitude, Lon_Lat, Latitude, X_COORD_CD, Y_COORD_CD, LOC_OF_OCCUR_DESC, LOC_CLASSFCTN_DESC)) %>%
+  rename(date = OCCUR_DATE, time = OCCUR_TIME, location = LOCATION_DESC, jurisdiction = JURISDICTION_CODE, boro = BORO, perp_age = PERP_AGE_GROUP, perp_sex = PERP_SEX, perp_race = PERP_RACE, vic_age = VIC_AGE_GROUP, vic_sex = VIC_SEX, vic_race = VIC_RACE, murder_flag = STATISTICAL_MURDER_FLAG, precinct = PRECINCT, incident_key = INCIDENT_KEY) %>%
+  mutate(date = mdy(date)) %>%
+  na.omit(NYPD_Data)
+
+#add in null data omit and mutate time
+#look back at COVID Data
+
+split_NYPD_Data <- split.data.frame(NYPD_Data, NYPD_Data$boro)
+
+brooklyn_data <- split_NYPD_Data$BROOKLYN
+bronx_data <- split_NYPD_Data$BRONX
+manhattan_data <- split_NYPD_Data$MANHATTAN
+queens_data <- split_NYPD_Data$QUEENS
+staten_island_data <- split_NYPD_Data$`STATEN ISLAND`
+
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r NYPD_Shooting_Data}
+summary(NYPD_Data)
+```
+```{r tidy_NYPD_Shooting_data}
+
+summary(NYPD_Data)
+summary(brooklyn_data)
+summary(bronx_data)
+summary(manhattan_data)
+summary(queens_data)
+summary(staten_island_data)
+
+```
+
+```{r filter_boro_data}
+
+brooklyn_data <- brooklyn_data %>%
+  group_by(precinct, jurisdiction, date) %>%
+  summarize(perp_age = as.vector(perp_age), vic_age = as.vector(vic_age), murder_flag = TRUE) %>%
+  ungroup()
+summary(brooklyn_data)
+
+
+bronx_data <- bronx_data %>%
+  group_by(precinct, jurisdiction, date) %>%
+  summarize(perp_age = as.vector(perp_age), vic_age = as.vector(vic_age), murder_flag = TRUE) %>%
+  ungroup()
+summary(bronx_data)
+
+
+manhattan_data <- manhattan_data %>%
+  group_by(precinct, jurisdiction, date) %>%
+  summarize(perp_age = as.vector(perp_age), vic_age = as.vector(vic_age), murder_flag = TRUE) %>%
+  ungroup()
+summary(manhattan_data)
+
+
+staten_island_data <- staten_island_data %>%
+  group_by(precinct, jurisdiction, date) %>%
+  summarize(perp_age = as.vector(perp_age), vic_age = as.vector(vic_age), murder_flag = TRUE) %>%
+  ungroup()
+
+summary(staten_island_data)
+
+
+queens_data <- queens_data %>%
+  group_by(precinct, jurisdiction, date) %>%
+  summarize(perp_age = as.vector(perp_age), vic_age = as.vector(vic_age), murder_flag = TRUE) %>%
+  ungroup()
+
+summary(queens_data)
+
+```
+
+```{r modeling_NYPD_data}
+
+
+NYPD_Data <- slice_sample(NYPD_Data, n = 100000000)
+NYPD_model <- lm(PRECINCT ~ JURISDICTION_CODE, data = NYPD_Data)
+summary(NYPD_model)
+
+
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r plot_NYPD_shooting_data, echo=FALSE}
+
+NYPD_Data <- as.data.frame(NYPD_Data)
+
+NYPD_plot <- NYPD_Data %>%
+  ggplot(mapping = aes(x = PRECINCT, y = JURISDICTION_CODE, color = "blue")) + 
+      geom_point() + 
+  geom_smooth(method = lm, formula = x ~ y, se = FALSE, color = "red")
+
+NYPD_plot
+
+
+manhattan_data <- as.data.frame(manhattan_data)
+
+Manhattan_plot <- manhattan_data %>%
+  ggplot(mapping = aes(x = precinct, y = jurisdiction, color = "yellow")) + 
+  geom_point()
+
+Manhattan_plot
+
+```
+```{r Conclusion}
+
+print("Possible sources of bias within the data could include any shootings that are not reported to the police by the public or any shootings that the police themselves may have committed.  My personal bias would be that I was analyizing from the perspective of police-committed crimes to begin with and then began reading the data as civilian-committed crimes.")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
