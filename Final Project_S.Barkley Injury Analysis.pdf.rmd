@@ -1,0 +1,143 @@
+---
+title: "S.Barkley Injury Analysis"
+author: "Ashley Alvarado"
+date: "2025-10-03"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(dplyr)
+library(nflfastR)
+library(ggplot2)
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r NFL}
+# --- Define analysis parameters ---
+# Specify the seasons to analyze
+seasons <- 2018:2024
+
+player_name <- "Saquon Barkley"
+injury_date <- as.Date("2020-09-20")
+
+# --- Load and prepare the data ---
+# Load play-by-play data
+pbp <- load_pbp(seasons)
+
+# Find the player's unique ID
+rosters <- fast_scraper_roster(seasons)
+player_id <- rosters %>%
+  filter(full_name == player_name) %>%
+  pull(gsis_id) %>%
+  first()
+
+if (is.null(player_id)) {
+  stop(paste("Player", player_name, "not found in rosters."))
+}
+
+#player's rushing attempts
+rb_plays <- pbp %>%
+  filter(rusher_player_id == player_id, rush_attempt == 1) %>%
+  mutate(game_date = as.Date(game_date))
+
+
+pre_injury_plays <- rb_plays %>%
+  filter(game_date < injury_date)
+
+post_injury_plays <- rb_plays %>%
+  filter(game_date >= injury_date)
+
+
+pre_injury_stats <- pre_injury_plays %>%
+  summarize(
+    carries = n(),
+    total_yards = sum(rushing_yards, na.rm = TRUE),
+    ypc = mean(rushing_yards, na.rm = TRUE)
+  )
+
+
+post_injury_stats <- post_injury_plays %>%
+  summarize(
+    carries = n(),
+    total_yards = sum(rushing_yards, na.rm = TRUE),
+    ypc = mean(rushing_yards, na.rm = TRUE)
+  )
+
+rb_rushing_by_game <- pbp %>%
+  filter(rusher_player_id == player_id, rush_attempt == 1) %>%
+  mutate(game_date = as.Date(game_date)) %>%
+  group_by(game_id, game_date) %>%
+  summarize(total_yards = sum(rushing_yards, na.rm = TRUE), .groups = 'drop') %>%
+  arrange(game_date)
+
+summary_data <- bind_rows(
+  pre_injury_stats %>% mutate(period = "Before Injury"),
+  post_injury_stats %>% mutate(period = "After Injury")
+)
+
+# Reshape the data from wide to long format for easier plotting, new column to hold 'carries', 'total_yards', and 'ypc'
+plot_data_long <- summary_data %>%
+  pivot_longer(cols = c(carries, total_yards, ypc),
+               names_to = "metric",
+               values_to = "value")
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+
+# --- Create the visualization ---
+ggplot(rb_rushing_by_game, aes(x = game_date, y = total_yards)) +
+  geom_line(color = "skyblue", size = .5) + 
+  geom_point(aes(color = game_date >= injury_date), size = 1.5) + 
+  geom_vline(xintercept = as.numeric(injury_date), linetype = "dashed", color = "red", size = 1) + 
+  geom_hline(yintercept = 100, linetype = "dotted", color = "blue") + 
+  annotate("text", x = injury_date, y = max(rb_rushing_by_game$total_yards),
+           label = "Injury Date", color = "red", vjust = -1, hjust = -0.1) + 
+  scale_color_manual(values = c("TRUE" = "darkgreen", "FALSE" = "darkblue")) + 
+  labs(title = paste("Rushing Yards Per Game for", player_name),
+       subtitle = paste("Injury date:", injury_date),
+       x = "Game Date",
+       y = "Rushing Yards",
+       caption = "Data: nflfastR | Visualization: ggplot2") +
+  theme_minimal() +
+  theme(legend.position = "none") 
+
+
+ggplot(plot_data_long, aes(x = period, y = value, fill = period)) +
+  geom_bar(stat = "identity", position = "dodge") + 
+  facet_wrap(~metric, scales = "free_y") + 
+  scale_fill_manual(values = c("Before Injury" = "blue", "After Injury" = "darkgreen")) + 
+  labs(
+    title = paste("Comparison of Rushing Metrics for", player_name),
+    subtitle = "Before vs. After Injury",
+    x = "Period Relative to Injury",
+    y = "Value",
+    fill = "Period"
+  ) +
+  theme_minimal() + 
+  theme(
+    legend.position = "bottom", 
+    plot.title = element_text(hjust = 0.5), 
+    plot.subtitle = element_text(hjust = 0.5) 
+  )
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+print("There is a clear visual difference between showing these stats in a bar graph vs showing it in a line graph.  The line graph looks very crowded and is harder to read no matter the color difference for the points.  The bar graph gives a much better idea of progress over time in the pre and post injury stats.")
+```
+
